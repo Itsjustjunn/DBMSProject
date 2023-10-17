@@ -52,9 +52,9 @@ addresses = [
 root = tk.Tk()
 root.title("Property Login Page")
 
-# Load the background image using Pillow (PIL)
-# image = Image.open(r'put the file path image')  # Replace with the actual image filename
-# background_image = ImageTk.PhotoImage(image)
+Load the background image using Pillow (PIL)
+image = Image.open(r'C:\Users\chian\Downloads\Marina One Residences.jpg')
+background_image = ImageTk.PhotoImage(image)
 
 # Create a label to display the background image
 background_label = tk.Label(root, image=background_image)
