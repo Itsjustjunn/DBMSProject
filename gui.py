@@ -52,7 +52,7 @@ addresses = [
 root = tk.Tk()
 root.title("Property Login Page")
 
-Load the background image using Pillow (PIL)
+# Load the background image using Pillow (PIL)
 image = Image.open(r'C:\Users\chian\Downloads\Marina One Residences.jpg')
 background_image = ImageTk.PhotoImage(image)
 
