@@ -34,7 +34,7 @@ def validate_login():
 # Function to perform the search or filter operation
 def search_addresses():
     keyword = search_entry.get()
-result_listbox.delete(0, tk.END)
+    result_listbox.delete(0, tk.END)
     for address in addresses:
         if keyword.lower() in address.lower():
             result_listbox.insert(tk.END, address)
@@ -52,7 +52,7 @@ addresses = [
 root = tk.Tk()
 root.title("Property Login Page")
 
-Load the background image using Pillow (PIL)
+# Load the background image using Pillow (PIL)
 image = Image.open(r'C:\Users\chian\Downloads\Marina One Residences.jpg')
 background_image = ImageTk.PhotoImage(image)
 
