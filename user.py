@@ -1,37 +1,40 @@
-def getUserInfo(string userID):
+import json
+
+def getUserInfo(json_file, userID):
     try:
-        conn = sqlite3.connect('your_database.db')
-        cursor = conn.cursor()
-      
-        query = "SELECT * FROM users WHERE user_id = ?"
-        cursor.execute(query, (userID,))
-        
-        user_info = cursor.fetchone()
+        with open(json_file, 'r') as file:
+            user_data = json.load(file)
 
-        if user_info:
-            return user_id
-        else:
-            return None 
+            if userID in user_data:
+                user_info = user_data[userID]
+                return User(userID, user_info['username'], user_info['email'])
+            else:
+                return None
 
-editUser(string UserID, User user)
- try:
-    
-        conn = sqlite3.connect('database')
-        cursor = conn.cursor()
-   
-        query = "UPDATE users SET username = ?, email = ? WHERE user_id = ?"
-        cursor.execute(query, (user.username, user.email, UserID))
-        
-        conn.commit()
-   
-        if cursor.rowcount == 0:
-            print("User not found")
-        else:
+    except FileNotFoundError:
+        print("JSON file not found")
+        return None
+    except Exception as e:
+        print(f"Error fetching user info: {e}")
+        return None
+
+def editUser(json_file, UserID, user):
+    try:
+        with open(json_file, 'r') as file:
+            user_data = json.load(file)
+
+        if UserID in user_data:
+            user_data[UserID]['username'] = user.username
+            user_data[UserID]['email'] = user.email
+
+            with open(json_file, 'w') as file:
+                json.dump(user_data, file, indent=4)
+
             print("User information updated successfully")
+        else:
+            print("User not found")
 
-    except sqlite3.Error as e:
-        print(f"Error editing user info: {e}")
+    except FileNotFoundError:
+        print("JSON file not found")
 
-    finally:
-        conn.close()
 
