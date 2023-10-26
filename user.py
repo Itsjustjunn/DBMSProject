@@ -1,4 +1,4 @@
-#def getUserInfo(string userID):
+def getUserInfo(string userID):
     try:
         conn = sqlite3.connect('your_database.db')
         cursor = conn.cursor()
@@ -13,7 +13,7 @@
         else:
             return None 
 
-#editUser(string UserID, User user)
+editUser(string UserID, User user)
  try:
     
         conn = sqlite3.connect('database')
