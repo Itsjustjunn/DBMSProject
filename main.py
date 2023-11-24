@@ -5,8 +5,10 @@ import re
 from tkinter import messagebox
 from PIL import Image, ImageTk
 import os
-import uuid
+from pymongo import MongoClient
 
+#Database connections
+########################################################################################################################
 # Connect to MSSQL database using Windows Authentication
 connection_config = {
     'driver': '{SQL Server}',
@@ -17,6 +19,11 @@ connection_config = {
 
 conn_str = 'DRIVER={driver};SERVER={server};DATABASE={database};Trusted_Connection={trusted_connection}'.format(**connection_config)
 conn = pyodbc.connect(conn_str)
+
+# client = MongoClient('localhost', 27017)
+# db = client['DBMSProjectUsers']
+# collection = db['collection_users']
+########################################################################################################################
 
 def fetch_data_after_login():
     try:
@@ -73,13 +80,20 @@ def show_data_window(rows):
     tree.pack(expand=True, fill=tk.BOTH)
 
 def validate_login():
-    login_file = open('login.txt', "r")
+
     username = username_entry.get()
     password = password_entry.get()
 
-    for line in open("login.txt", "r").readlines():
-        login_info = line.split()
-        if username == login_info[0] and password == login_info[1]:
+    client = MongoClient('localhost', 27017)
+    db = client['DBMSProjectUsers']
+    collection = db['collection_users']
+
+    # Query MongoDB for the provided username
+    user_document = collection.find_one({"userid": username})
+
+    if user_document:
+        # User found, check if the provided password matches
+        if user_document["password"] == password:
             messagebox.showinfo("Login Successful", "Welcome, " + username + "!")
             username_label.pack_forget()
             username_entry.pack_forget()
@@ -115,6 +129,16 @@ def display_stats(selected_entry):
     for key, value in selected_entry.items():
         stats_text.insert(tk.END, f"{key}: {value}\n\n")
 
+    # Create a button to edit the property
+    update_button = tk.Button(stats_window, text="Update Property", command=lambda: update_property(selected_entry),
+                              font=('Arial', 20))
+    update_button.pack(side="right")
+
+    # Create a button to delete the property
+    delete_button = tk.Button(stats_window, text="Delete Property",
+                              command=lambda: delete_property(selected_entry['property_id'], stats_window), font=('Arial', 20))
+    delete_button.pack(side="right")
+
 
 def search_addresses(cursor, table_name):
     global min_price_entry, max_price_entry, min_lease_entry, max_lease_entry, flat_type_entry, result_text
@@ -147,8 +171,12 @@ def search_addresses(cursor, table_name):
     filter_button = tk.Button(results_window, text="Apply Filter", command=lambda: apply_filter(cursor, table_name))
     filter_button.pack()
 
-    add_property_button = tk.Button(results_window, text="Add Property", command=add_property_window, font=('Arial', 20))
-    add_property_button.pack(side="right")
+    add_property_button = tk.Button(results_window, text="Add Property", command=add_property_window,
+                                    font=('Arial', 20))
+    add_property_button.place(relx=0.9, rely=0.1, anchor="ne")
+
+    user_info_button = tk.Button(results_window, text="Show User Info", command=show_user_info)
+    user_info_button.pack(anchor="nw")
 
     # Create a text widget for displaying the results
     helvetica_font = ("Helvetica", 12)
@@ -240,7 +268,8 @@ def apply_filter(cursor, table_name):
 
     result_text.config(state=tk.DISABLED)
 
-
+#Database connections
+########################################################################################################################
 def add_property_window():
     add_window = tk.Toplevel(root)
     add_window.title("Add Property")
@@ -271,19 +300,19 @@ def add_property_window():
         entry_widgets[detail] = entry
 
     # Create a button to save the property details
-    save_button = tk.Button(add_window, text="Save", command=lambda: save_property(entry_widgets))
+    save_button = tk.Button(add_window, text="Save", command=lambda: save_property(entry_widgets, add_window))
     save_button.grid(row=len(property_details), columnspan=2, pady=10)
 
-def save_property(entry_widgets):
+def save_property(entry_widgets, add_window):
     # Retrieve the property details from the entry widgets
     property_data = {detail: entry.get() for detail, entry in entry_widgets.items()}
 
     # Validate the data (you can add more validation if needed)
 
     # Insert the property data into the database
-    insert_property_into_database(property_data)
+    insert_property_into_database(property_data, add_window)
 
-def insert_property_into_database(property_data):
+def insert_property_into_database(property_data, add_window):
     try:
         cursor = conn.cursor()
 
@@ -298,6 +327,8 @@ def insert_property_into_database(property_data):
         # Commit the changes to the database
         conn.commit()
 
+        # Close the update window after successful update
+        add_window.destroy()
         # Notify the user that the property has been added
         messagebox.showinfo("Success", "Property added successfully!")
 
@@ -324,6 +355,131 @@ def get_last_property_id():
     finally:
         if 'cursor' in locals() and cursor:
             cursor.close()
+
+
+def update_property(selected_entry):
+    update_window = tk.Toplevel(root)
+    update_window.title("Update Property")
+
+    # Create labels and entry widgets for property details
+    property_details = ['property_id', 'month', 'town', 'flat_type', 'block', 'street_name', 'storey_range', 'floor_area_sqm', 'flat_model',
+                        'lease_commence_date', 'remaining_lease', 'resale_price']
+
+    entry_widgets = {}
+
+    for i, detail in enumerate(property_details):
+        label = tk.Label(update_window, text=f"{detail}:", font=('Arial', 12))
+        label.grid(row=i, column=0, padx=10, pady=5, sticky="e")
+
+        # Use the value from the selected entry for each detail
+        entry_value = selected_entry.get(detail, '')
+        entry = tk.Entry(update_window, font=('Arial', 12))
+        entry.grid(row=i, column=1, padx=10, pady=5, sticky="w")
+        entry.insert(0, entry_value)  # Pre-fill the entry with the selected value
+
+        entry_widgets[detail] = entry
+
+    # Create a button to save the updated property details
+    save_button = tk.Button(update_window, text="Save", command=lambda: save_updated_property(entry_widgets, update_window))
+    save_button.grid(row=len(property_details), columnspan=2, pady=10)
+
+def save_updated_property(entry_widgets, update_window):
+    # Retrieve the values from entry widgets
+    property_id = entry_widgets['property_id'].get()
+    month = entry_widgets['month'].get()
+    town = entry_widgets['town'].get()
+    flattype = entry_widgets['flat_type'].get()
+    block = entry_widgets['block'].get()
+    streetname = entry_widgets['street_name'].get()
+    storeyrange = entry_widgets['storey_range'].get()
+    floorareasqm = entry_widgets['floor_area_sqm'].get()
+    flatmodel = entry_widgets['flat_model'].get()
+    leasecommencedate = entry_widgets['lease_commence_date'].get()
+    remaininglease = entry_widgets['remaining_lease'].get()
+    resaleprice = entry_widgets['resale_price'].get()
+    # ... (repeat for other details)
+
+    # Construct an SQL UPDATE statement
+    update_query = (f"UPDATE Property SET month='{month}', town='{town}', flat_type='{flattype}' , "
+                    f"block='{block}' , street_name='{streetname}', storey_range='{storeyrange}', "
+                    f"floor_area_sqm='{floorareasqm}', flat_model='{flatmodel}', lease_commence_date='{leasecommencedate}', "
+                    f" remaining_lease='{remaininglease}', resale_price='{resaleprice}' WHERE property_id='{property_id}'")
+
+    try:
+        # Execute the update query using your database connection
+        cursor = conn.cursor()
+        cursor.execute(update_query)
+        conn.commit()
+
+        # Close the update window after successful update
+        update_window.destroy()
+        # Notify the user that the property has been added
+        messagebox.showinfo("Success", "Property updated successfully!")
+
+    except pyodbc.Error as e:
+        print(f"An error occurred: {e}")
+        messagebox.showerror("Error", "Failed to update property.")
+
+    finally:
+        # Close the database connection
+        if 'conn' in locals() and conn:
+            conn.close()
+
+
+def delete_property(property_id, stats_window):
+    # Prompt the user for confirmation
+    response = messagebox.askyesno("Confirmation", f"Do you really want to delete Property ID {property_id}?")
+
+    if response:
+        # Construct an SQL DELETE statement
+        delete_query = f"DELETE FROM Property WHERE property_id='{property_id}'"
+
+        try:
+            # Execute the delete query using your database connection
+            cursor = conn.cursor()
+            cursor.execute(delete_query)
+            conn.commit()
+
+            stats_window.destroy()
+            # Notify the user that the property has been added
+            messagebox.showinfo("Success", "Property deleted successfully!")
+
+        except pyodbc.Error as e:
+            print(f"An error occurred: {e}")
+            messagebox.showerror("Error", "Failed to delete property.")
+
+        finally:
+            # Close the database connection
+            if 'conn' in locals() and conn:
+                conn.close()
+
+def show_user_info():
+    # Connect to MongoDB
+    client = MongoClient('localhost', 27017)
+    db = client['DBMSProjectUsers']
+    collection = db['collection_users']
+
+    # Query MongoDB for the currently logged-in user
+    username = username_entry.get()
+    user_document = collection.find_one({"userid": username})
+
+    if user_document:
+        # Create a new window to display user information
+        user_info_window = tk.Toplevel(root)
+        user_info_window.title("User Information")
+
+        # Display user information in the new window
+        info_label = tk.Label(user_info_window, text=f"User Information\n\n"
+                                                   f"User ID: {user_document['userid']}\n"
+                                                   f"Name: {user_document['name']}\n"
+                                                   f"Email: {user_document['email']}\n"
+                                                   f"Phone Number: {user_document['phoneno']}",
+                           font=('Arial', 12))
+        info_label.pack(padx=10, pady=10)
+
+    else:
+        messagebox.showerror("Error", "User not found.")
+
 
 # Create the main application window
 root = tk.Tk()
