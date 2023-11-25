@@ -148,7 +148,7 @@ def display_stats(selected_entry):
     if (check_user_role() == "agent"):
 
         # Create a button to edit the property
-        buyers_button = tk.Button(stats_window, text="View Interested Buyers", command=lambda: update_property(selected_entry))
+        buyers_button = tk.Button(stats_window, text="View Interested Buyers", command=lambda: display_interested_buyers(selected_entry['property_id']))
         buyers_button.pack(side="left")
         # Create a button to edit the property
         update_button = tk.Button(stats_window, text="Update Property", command=lambda: update_property(selected_entry))
@@ -477,6 +477,54 @@ def delete_property(property_id, stats_window):
             # Close the database connection
             if 'conn' in locals() and conn:
                 conn.close()
+
+
+def fetch_interested_buyers(property_id):
+    cursor = conn.cursor()
+    # Execute the SQL query to fetch interested buyers for the selected property_id
+    query = f"SELECT * FROM Property_Buyer WHERE property_id = {property_id}"
+    cursor.execute(query)
+
+    # Fetch all rows from the result set
+    rows = cursor.fetchall()
+
+    # Convert rows to a list of dictionaries
+    column_names = [column[0] for column in cursor.description]
+    rows_as_dicts = [dict(zip(column_names, row)) for row in rows]
+
+    # Connect to MongoDB
+    client = MongoClient('localhost', 27017)
+    db = client['DBMSProjectUsers']
+    collection = db['collection_users']
+
+    user_ids = [result['userid'] for result in rows_as_dicts]
+
+    # Fetch usernames from MongoDB using user IDs
+    interested_buyers = []
+    for user_id in user_ids:
+        user_data = collection.find_one({"userid": user_id})
+        if user_data:
+            interested_buyers.append(user_data['name'])
+
+    return interested_buyers
+
+
+def display_interested_buyers(property_id):
+    interested_buyers = fetch_interested_buyers(property_id)
+
+    # Create a new Toplevel window for displaying interested buyers
+    buyers_window = tk.Toplevel(root)
+    buyers_window.title("Interested Buyers")
+
+    # Create a text widget to display interested buyers
+    helvetica_font = ("Helvetica", 12)
+    buyers_text = tk.Text(buyers_window, wrap=tk.NONE, font=helvetica_font)
+    buyers_text.pack(fill=tk.BOTH, expand=True)
+
+    # Display interested buyers in the new window
+    for buyer in interested_buyers:
+        buyers_text.insert(tk.END, f"{buyer}\n")
+
 
 def show_user_info():
     # Connect to MongoDB
