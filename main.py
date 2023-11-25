@@ -118,14 +118,28 @@ def check_user_role():
     collection = db['collection_users']
 
     # Query MongoDB for the currently logged-in user
-    username = username_entry.get()
-    user_document = collection.find_one({"userid": username})
+    userid = username_entry.get()
+    user_document = collection.find_one({"userid": userid})
 
     if user_document:
         # Check the role of the user
         user_role = user_document.get("role", "")
         return user_role
 
+
+def get_current_user_id():
+    # Connect to MongoDB
+    client = MongoClient('localhost', 27017)
+    db = client['DBMSProjectUsers']
+    collection = db['collection_users']
+
+    # Query MongoDB for the currently logged-in user
+    userid = username_entry.get()
+    user_document = collection.find_one({"userid": userid})
+
+    if user_document:
+        # Return the userid of the user
+        return user_document.get("userid", "")
 def validate_login_and_fetch_data():
     if validate_login():
         # If login is successful, fetch and display data
@@ -158,6 +172,10 @@ def display_stats(selected_entry):
         delete_button = tk.Button(stats_window, text="Delete Property",
                                   command=lambda: delete_property(selected_entry['property_id'], stats_window))
         delete_button.pack(side="right")
+
+    elif (check_user_role() == "buyer"):
+        interest_button = tk.Button(stats_window, text="Show Interest", command=lambda: show_interest(conn.cursor(), selected_entry['property_id']))
+        interest_button.pack(side="right")
 
 
 def search_addresses(cursor, table_name):
@@ -504,7 +522,7 @@ def fetch_interested_buyers(property_id):
     for user_id in user_ids:
         user_data = collection.find_one({"userid": user_id})
         if user_data:
-            interested_buyers.append(user_data['name'])
+            interested_buyers.append("Name: " + user_data['name'] + ", Email: " + user_data['email'] + ", Contact: +65" + user_data['phoneno'])
 
     return interested_buyers
 
@@ -524,6 +542,31 @@ def display_interested_buyers(property_id):
     # Display interested buyers in the new window
     for buyer in interested_buyers:
         buyers_text.insert(tk.END, f"{buyer}\n")
+
+
+# Function to check if a user has already shown interest
+def has_shown_interest(cursor, userid, property_id):
+    query = f"SELECT COUNT(*) FROM Property_Buyer WHERE userid = ? AND property_id = ?"
+    cursor.execute(query, (userid, property_id))
+    count = cursor.fetchone()[0]
+    return count > 0
+
+# Function to add a new row in the Property_Buyer table
+def add_interest(cursor, userid, property_id):
+    query = "INSERT INTO Property_Buyer (userid, property_id) VALUES (?, ?)"
+    cursor.execute(query, (userid, property_id))
+    cursor.commit()
+
+
+def show_interest(cursor, property_id):
+    userid = get_current_user_id()  # You need to implement a function to get the current user's ID
+
+    if not has_shown_interest(cursor, userid, property_id):
+        add_interest(cursor, userid, property_id)
+        messagebox.showinfo("Interest Shown", "You have successfully shown interest for this property.")
+    else:
+        messagebox.showinfo("Already Shown Interest", "You have already shown interest for this property.")
+
 
 
 def show_user_info():
