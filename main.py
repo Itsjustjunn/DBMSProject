@@ -110,6 +110,22 @@ def validate_login():
     messagebox.showerror("Login Failed", "Invalid username or password")
     return False
 
+
+def check_user_role():
+    # Connect to MongoDB
+    client = MongoClient('localhost', 27017)
+    db = client['DBMSProjectUsers']
+    collection = db['collection_users']
+
+    # Query MongoDB for the currently logged-in user
+    username = username_entry.get()
+    user_document = collection.find_one({"userid": username})
+
+    if user_document:
+        # Check the role of the user
+        user_role = user_document.get("role", "")
+        return user_role
+
 def validate_login_and_fetch_data():
     if validate_login():
         # If login is successful, fetch and display data
@@ -129,15 +145,16 @@ def display_stats(selected_entry):
     for key, value in selected_entry.items():
         stats_text.insert(tk.END, f"{key}: {value}\n\n")
 
-    # Create a button to edit the property
-    update_button = tk.Button(stats_window, text="Update Property", command=lambda: update_property(selected_entry),
-                              font=('Arial', 20))
-    update_button.pack(side="right")
+    if (check_user_role() == "agent"):
+        # Create a button to edit the property
+        update_button = tk.Button(stats_window, text="Update Property", command=lambda: update_property(selected_entry),
+                                  font=('Arial', 20))
+        update_button.pack(side="right")
 
-    # Create a button to delete the property
-    delete_button = tk.Button(stats_window, text="Delete Property",
-                              command=lambda: delete_property(selected_entry['property_id'], stats_window), font=('Arial', 20))
-    delete_button.pack(side="right")
+        # Create a button to delete the property
+        delete_button = tk.Button(stats_window, text="Delete Property",
+                                  command=lambda: delete_property(selected_entry['property_id'], stats_window), font=('Arial', 20))
+        delete_button.pack(side="right")
 
 
 def search_addresses(cursor, table_name):
@@ -171,9 +188,9 @@ def search_addresses(cursor, table_name):
     filter_button = tk.Button(results_window, text="Apply Filter", command=lambda: apply_filter(cursor, table_name))
     filter_button.pack()
 
-    add_property_button = tk.Button(results_window, text="Add Property", command=add_property_window,
-                                    font=('Arial', 20))
-    add_property_button.place(relx=0.9, rely=0.1, anchor="ne")
+    if(check_user_role() == "agent"):
+        add_property_button = tk.Button(results_window, text="Add Property", command=add_property_window)
+        add_property_button.place(relx=0.9, rely=0.1, anchor="ne")
 
     user_info_button = tk.Button(results_window, text="Show User Info", command=show_user_info)
     user_info_button.pack(anchor="nw")
