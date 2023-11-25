@@ -146,14 +146,17 @@ def display_stats(selected_entry):
         stats_text.insert(tk.END, f"{key}: {value}\n\n")
 
     if (check_user_role() == "agent"):
+
         # Create a button to edit the property
-        update_button = tk.Button(stats_window, text="Update Property", command=lambda: update_property(selected_entry),
-                                  font=('Arial', 20))
+        buyers_button = tk.Button(stats_window, text="View Interested Buyers", command=lambda: update_property(selected_entry))
+        buyers_button.pack(side="left")
+        # Create a button to edit the property
+        update_button = tk.Button(stats_window, text="Update Property", command=lambda: update_property(selected_entry))
         update_button.pack(side="right")
 
         # Create a button to delete the property
         delete_button = tk.Button(stats_window, text="Delete Property",
-                                  command=lambda: delete_property(selected_entry['property_id'], stats_window), font=('Arial', 20))
+                                  command=lambda: delete_property(selected_entry['property_id'], stats_window))
         delete_button.pack(side="right")
 
 
@@ -164,6 +167,8 @@ def search_addresses(cursor, table_name):
     # Create a new Toplevel window for displaying results
     results_window = tk.Toplevel(root)
     results_window.title("Properties")
+    # Set the window to full screen
+    results_window.attributes('-fullscreen', True)
 
     max_price_label = tk.Label(results_window, text="Max Resale Price:")
     max_price_label.pack()
@@ -190,10 +195,13 @@ def search_addresses(cursor, table_name):
 
     if(check_user_role() == "agent"):
         add_property_button = tk.Button(results_window, text="Add Property", command=add_property_window)
-        add_property_button.place(relx=0.9, rely=0.1, anchor="ne")
+        add_property_button.pack(anchor="ne")
 
     user_info_button = tk.Button(results_window, text="Show User Info", command=show_user_info)
-    user_info_button.pack(anchor="nw")
+    user_info_button.place(relx=1, rely=0.00, anchor="ne")
+    # Create a logout button
+    logout_button = tk.Button(results_window, text="Logout", command=lambda: logout(results_window))
+    logout_button.place(relx=0.94, rely=0.00, anchor="ne")
 
     # Create a text widget for displaying the results
     helvetica_font = ("Helvetica", 12)
@@ -496,6 +504,43 @@ def show_user_info():
 
     else:
         messagebox.showerror("Error", "User not found.")
+
+
+def logout(window):
+    # Ask for confirmation before logging out
+    confirm = messagebox.askyesno("Logout", "Are you sure you want to logout?")
+    if confirm:
+        # Destroy the current window and return to the login screen
+        window.destroy()
+        reset_login_page()
+
+
+def reset_login_page():
+    # Show the main login window
+    root.deiconify()
+
+    # Clear the username and password entries
+    username_entry.delete(0, tk.END)
+    password_entry.delete(0, tk.END)
+
+    # Show the login widgets
+    username_label.pack()
+    username_entry.pack()
+    password_label.pack()
+    password_entry.pack()
+    welcome_label.pack()
+    login_button.pack()
+
+    # Hide the search/filter frame
+    search_frame.pack_forget()
+
+    # Hide the background image
+    background_label.pack()
+
+    # Clear any existing search results in the result_text widget
+    result_text.config(state=tk.NORMAL)
+    result_text.delete(1.0, tk.END)
+    result_text.config(state=tk.DISABLED)
 
 
 # Create the main application window
