@@ -1,4 +1,5 @@
 import tkinter as tk
+from datetime import datetime
 from tkinter import messagebox, ttk
 import pyodbc
 import re
@@ -27,29 +28,9 @@ conn = pyodbc.connect(conn_str)
 
 def fetch_data_after_login():
     try:
-        cursor = conn.cursor()
-
-        # Execute a sample query (replace with your query)
-        query = 'SELECT * FROM Property'
-        cursor.execute(query)
-
-        # Fetch all rows from the result set
-        rows = cursor.fetchall()
-        search_frame = tk.Frame(root)
-
-        # Create an entry field for search/filter
-        search_label = tk.Label(search_frame, text="Search:", font=('Arial', 20))
-        search_label.pack(side="left")
-
-        search_entry = tk.Entry(search_frame, font=('Arial', 20))
-        search_entry.pack(side="left")
-
-        search_button = tk.Button(search_frame, text="Search", command=search_addresses(conn.cursor(), 'Property'),
-                                  font=('Arial', 20))
-        search_button.pack(side="left")
-
-        # Display the data in a new window
-        #show_data_window(rows)
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor() #problem here
+        search_addresses(cursor, 'Property')
 
     except pyodbc.Error as e:
         print(f"An error occurred: {e}")
@@ -58,6 +39,7 @@ def fetch_data_after_login():
         # Close the database connection in the 'finally' block to ensure it's closed even if an exception occurs
         if 'conn' in locals() and conn:
             conn.close()
+
 
 def show_data_window(rows):
     data_window = tk.Toplevel(root)
@@ -127,7 +109,7 @@ def check_user_role():
         return user_role
 
 
-def get_current_user_id():
+def check_user_id():
     # Connect to MongoDB
     client = MongoClient('localhost', 27017)
     db = client['DBMSProjectUsers']
@@ -140,6 +122,42 @@ def get_current_user_id():
     if user_document:
         # Return the userid of the user
         return user_document.get("userid", "")
+
+
+def check_user_name():
+    # Connect to MongoDB
+    client = MongoClient('localhost', 27017)
+    db = client['DBMSProjectUsers']
+    collection = db['collection_users']
+
+    # Query MongoDB for the currently logged-in user
+    userid = username_entry.get()
+    user_document = collection.find_one({"userid": userid})
+
+    if user_document:
+        # Check the role of the user
+        user_name = user_document.get("name", "")
+        return user_name
+def get_user_list_from_mongodb():
+    try:
+        # Connect to MongoDB
+        client = MongoClient('localhost', 27017)
+        db = client['DBMSProjectUsers']
+        collection = db['collection_users']
+
+        # Retrieve all users from the collection
+        users = collection.find({}, {"_id": 0, "userid": 1})
+
+        # Convert the cursor to a list of dictionaries
+        user_list = list(users)
+
+        return user_list
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []
+
+
 def validate_login_and_fetch_data():
     if validate_login():
         # If login is successful, fetch and display data
@@ -159,7 +177,7 @@ def display_stats(selected_entry):
     for key, value in selected_entry.items():
         stats_text.insert(tk.END, f"{key}: {value}\n\n")
 
-    if (check_user_role() == "agent"):
+    if check_user_role() == "agent" or check_user_role() == "admin":
 
         # Create a button to edit the property
         buyers_button = tk.Button(stats_window, text="View Interested Buyers", command=lambda: display_interested_buyers(selected_entry['property_id']))
@@ -211,7 +229,15 @@ def search_addresses(cursor, table_name):
     filter_button = tk.Button(results_window, text="Apply Filter", command=lambda: apply_filter(cursor, table_name))
     filter_button.pack()
 
-    if(check_user_role() == "agent"):
+    if check_user_role() == "admin":
+        # Create buttons for admin tasks
+        add_user_button = tk.Button(results_window, text="Add User", command=add_user_window)
+        add_user_button.place(relx=0.00, rely=0.22, anchor="nw")
+
+        delete_user_button = tk.Button(results_window, text="Delete User", command=delete_user_window)
+        delete_user_button.place(relx=0.04, rely=0.22, anchor="nw")
+
+    if check_user_role() == "agent" or check_user_role() == "admin":
         add_property_button = tk.Button(results_window, text="Add Property", command=add_property_window)
         add_property_button.pack(anchor="ne")
 
@@ -311,8 +337,7 @@ def apply_filter(cursor, table_name):
 
     result_text.config(state=tk.DISABLED)
 
-#Database connections
-########################################################################################################################
+
 def add_property_window():
     add_window = tk.Toplevel(root)
     add_window.title("Add Property")
@@ -343,19 +368,21 @@ def add_property_window():
         entry_widgets[detail] = entry
 
     # Create a button to save the property details
-    save_button = tk.Button(add_window, text="Save", command=lambda: save_property(entry_widgets, add_window))
+    save_button = tk.Button(add_window, text="Save", command=lambda: save_property(entry_widgets, add_window, new_property_id))
     save_button.grid(row=len(property_details), columnspan=2, pady=10)
 
-def save_property(entry_widgets, add_window):
+
+def save_property(entry_widgets, add_window, new_property_id):
     # Retrieve the property details from the entry widgets
     property_data = {detail: entry.get() for detail, entry in entry_widgets.items()}
 
     # Validate the data (you can add more validation if needed)
 
     # Insert the property data into the database
-    insert_property_into_database(property_data, add_window)
+    insert_property_into_database(property_data, add_window, new_property_id)
 
-def insert_property_into_database(property_data, add_window):
+
+def insert_property_into_database(property_data, add_window, new_property_id):
     try:
         cursor = conn.cursor()
 
@@ -374,6 +401,7 @@ def insert_property_into_database(property_data, add_window):
         add_window.destroy()
         # Notify the user that the property has been added
         messagebox.showinfo("Success", "Property added successfully!")
+        log_user_action(check_user_id(), check_user_name(), "Added Property: " + str(new_property_id),cursor)
 
     except pyodbc.Error as e:
         print(f"An error occurred: {e}")
@@ -458,6 +486,7 @@ def save_updated_property(entry_widgets, update_window):
         update_window.destroy()
         # Notify the user that the property has been added
         messagebox.showinfo("Success", "Property updated successfully!")
+        log_user_action(check_user_id(), check_user_name(), "Edited Property: " + str(property_id), cursor)
 
     except pyodbc.Error as e:
         print(f"An error occurred: {e}")
@@ -486,6 +515,8 @@ def delete_property(property_id, stats_window):
             stats_window.destroy()
             # Notify the user that the property has been added
             messagebox.showinfo("Success", "Property deleted successfully!")
+            log_user_action(check_user_id(), check_user_name(), "Deleted Property: " + str(property_id), cursor)
+
 
         except pyodbc.Error as e:
             print(f"An error occurred: {e}")
@@ -559,7 +590,7 @@ def add_interest(cursor, userid, property_id):
 
 
 def show_interest(cursor, property_id):
-    userid = get_current_user_id()  # You need to implement a function to get the current user's ID
+    userid = check_user_id()  # You need to implement a function to get the current user's ID
 
     if not has_shown_interest(cursor, userid, property_id):
         add_interest(cursor, userid, property_id)
@@ -576,13 +607,16 @@ def show_user_info():
     collection = db['collection_users']
 
     # Query MongoDB for the currently logged-in user
-    username = username_entry.get()
-    user_document = collection.find_one({"userid": username})
+    userid = username_entry.get()
+    user_document = collection.find_one({"userid": userid})
 
     if user_document:
         # Create a new window to display user information
         user_info_window = tk.Toplevel(root)
         user_info_window.title("User Information")
+
+        edit_button = tk.Button(user_info_window, text="Edit", command=lambda: edit_user_info(user_document))
+        edit_button.pack(side="right")
 
         # Display user information in the new window
         info_label = tk.Label(user_info_window, text=f"User Information\n\n"
@@ -595,6 +629,217 @@ def show_user_info():
 
     else:
         messagebox.showerror("Error", "User not found.")
+
+
+def edit_user_info(user_document):
+    # Create a new window for updating user information
+    update_user_window = tk.Toplevel(root)
+    update_user_window.title("Update User Information")
+
+    # Create entry widgets to update user information
+    name_label = tk.Label(update_user_window, text="Name:")
+    name_label.pack()
+    new_name_entry = tk.Entry(update_user_window)
+    new_name_entry.insert(0, user_document['name'])
+    new_name_entry.pack()
+
+    email_label = tk.Label(update_user_window, text="Email:")
+    email_label.pack()
+    new_email_entry = tk.Entry(update_user_window)
+    new_email_entry.insert(0, user_document['email'])
+    new_email_entry.pack()
+
+    phone_label = tk.Label(update_user_window, text="Phone Number:")
+    phone_label.pack()
+    new_phone_entry = tk.Entry(update_user_window)
+    new_phone_entry.insert(0, user_document['phoneno'])
+    new_phone_entry.pack()
+
+    # Function to update user information in MongoDB
+    def update_user_info():
+        new_name = new_name_entry.get()
+        new_email = new_email_entry.get()
+        new_phone = new_phone_entry.get()
+
+        client = MongoClient('localhost', 27017)
+        db = client['DBMSProjectUsers']
+        collection = db['collection_users']
+
+        # Update the user information in MongoDB
+        collection.update_one(
+            {"userid": user_document['userid']},
+            {"$set": {"name": new_name, "email": new_email, "phoneno": new_phone}}
+        )
+
+        # Show a success message
+        messagebox.showinfo("Success", "User information updated successfully.")
+
+        # Close the update_user_window
+        update_user_window.destroy()
+
+        # Update the information label in the main user_info_window
+        tk.Label.config(text=f"User Information\n\n"
+                               f"User ID: {user_document['userid']}\n"
+                               f"Name: {new_name}\n"
+                               f"Email: {new_email}\n"
+                               f"Phone Number: {new_phone}")
+
+    # Create a button to trigger the update
+    update_button = tk.Button(update_user_window, text="Update Information", command=update_user_info)
+    update_button.pack()
+
+
+def add_user_window():
+    # Create a new window for adding a user
+    add_user_window = tk.Toplevel(root)
+    add_user_window.title("Add User")
+
+    # Create labels and entry widgets for user details
+    user_details = ["userid", "password", "name", "email", "phoneno", "role"]
+
+    entry_widgets = {}
+
+    for i, detail in enumerate(user_details):
+        label = tk.Label(add_user_window, text=f"{detail.capitalize()}:")
+        label.grid(row=i, column=0, padx=10, pady=5, sticky="e")
+
+        entry = tk.Entry(add_user_window)
+        entry.grid(row=i, column=1, padx=10, pady=5, sticky="w")
+
+        entry_widgets[detail] = entry
+
+    # Create a button to save the user details
+    save_user_button = tk.Button(add_user_window, text="Save User", command=lambda: save_user(entry_widgets, add_user_window))
+    save_user_button.grid(row=len(user_details), columnspan=2, pady=10)
+
+def save_user(entry_widgets, add_user_window):
+    # Retrieve the user details from the entry widgets
+    user_data = {detail: entry.get() for detail, entry in entry_widgets.items()}
+
+    # Validate the data (you can add more validation if needed)
+    newuserid = next(iter(user_data.values()))
+
+    # Insert the user data into the MongoDB collection
+    insert_user_into_mongodb(user_data, add_user_window, newuserid)
+
+
+def insert_user_into_mongodb(user_data, add_user_window, newuserid):
+    try:
+        # Connect to MongoDB
+        client = MongoClient('localhost', 27017)
+        db = client['DBMSProjectUsers']
+        collection = db['collection_users']
+
+        # Insert the user data into the MongoDB collection
+        collection.insert_one(user_data)
+
+        # Close the add_user_window after successful insertion
+        add_user_window.destroy()
+
+        # Notify the admin that the user has been added
+        messagebox.showinfo("Success", "User added successfully!")
+        cursor = conn.cursor()
+        log_user_action(check_user_id(), check_user_name(), "Added User: " + newuserid, cursor)
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        messagebox.showerror("Error", "Failed to add user.")
+
+    finally:
+        # Close the database connection
+        if 'conn' in locals() and conn:
+            conn.close()
+
+
+def delete_user_window():
+    # Create a new window for deleting a user
+    delete_user_window = tk.Toplevel(root)
+    delete_user_window.title("Delete User")
+
+    # Get the list of users from MongoDB
+    user_list = get_user_list_from_mongodb()
+
+    # Create a listbox to display the users
+    user_listbox = tk.Listbox(delete_user_window, selectmode=tk.SINGLE)
+    user_listbox.pack(pady=10)
+
+    # Insert users into the listbox
+    for user in user_list:
+        user_listbox.insert(tk.END, user["userid"])
+
+    # Create a button to delete the selected user
+    delete_user_button = tk.Button(delete_user_window, text="Delete User",
+                                   command=lambda: confirm_delete_user(user_listbox, delete_user_window))
+    delete_user_button.pack(pady=10)
+
+
+def confirm_delete_user(user_listbox, delete_user_window):
+    # Get the selected user from the listbox
+    selected_user_index = user_listbox.curselection()
+
+    if selected_user_index:
+        selected_user = user_listbox.get(selected_user_index)
+
+        # Ask for confirmation
+        response = messagebox.askokcancel("Confirm Deletion", f"Do you want to delete user: {selected_user}?")
+
+        if response:
+            # Delete the selected user from MongoDB
+            delete_user_from_mongodb(selected_user)
+
+            # Close the delete_user_window after successful deletion
+            delete_user_window.destroy()
+
+
+def delete_user_from_mongodb(useridtodel):
+    try:
+        # Connect to MongoDB
+        client = MongoClient('localhost', 27017)
+        db = client['DBMSProjectUsers']
+        collection = db['collection_users']
+
+        # Delete the user from MongoDB
+        collection.delete_one({"userid": useridtodel})
+
+        # Notify the admin that the user has been deleted
+        messagebox.showinfo("Success", f"User {useridtodel} deleted successfully!")
+        cursor = conn.cursor()
+        log_user_action(check_user_id(), check_user_name(), "Deleted User: " + useridtodel, cursor)
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        messagebox.showerror("Error", f"Failed to delete user {useridtodel}.")
+
+    finally:
+        # Close the database connection
+        if 'conn' in locals() and conn:
+            conn.close()
+
+
+def log_user_action(user_id, username, action_description,cursor):
+    try:
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor()
+        # Prepare the SQL query to insert the log
+        query = "INSERT INTO AuditLog (userid, username, actions, timestamp) " \
+                "VALUES (?, ?, ?, ?)"
+
+        # Specify the values for the query
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Execute the query
+        cursor.execute(query, user_id, username, action_description, timestamp)
+
+        # Commit the transaction
+        conn.commit()
+
+    except Exception as e:
+        print(f"Error logging user action: {e}")
+
+    finally:
+        # Close the database connection in the 'finally' block to ensure it's closed even if an exception occurs
+        if 'conn' in locals() and conn:
+            conn.close()
 
 
 def logout(window):
