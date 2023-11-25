@@ -230,6 +230,8 @@ def search_addresses(cursor, table_name):
     filter_button.pack()
 
     if check_user_role() == "admin":
+        view_audit_log_button = tk.Button(results_window, text="View Audit Log", command=show_audit_log)
+        view_audit_log_button.place(relx=0.00, rely=0.00, anchor="nw")
         # Create buttons for admin tasks
         add_user_button = tk.Button(results_window, text="Add User", command=add_user_window)
         add_user_button.place(relx=0.00, rely=0.22, anchor="nw")
@@ -838,6 +840,36 @@ def log_user_action(user_id, username, action_description,cursor):
 
     finally:
         # Close the database connection in the 'finally' block to ensure it's closed even if an exception occurs
+        if 'conn' in locals() and conn:
+            conn.close()
+
+
+def show_audit_log():
+    # Create a new window for displaying the audit log
+    audit_log_window = tk.Toplevel(root)
+    audit_log_window.title("Audit Log")
+
+    try:
+        cursor = conn.cursor()
+        # Execute a query to retrieve audit log data
+        cursor.execute('SELECT * FROM AuditLog')
+
+        # Fetch all rows from the result set
+        audit_log_data = cursor.fetchall()
+
+        # Display the audit log data in the new window
+        for row in audit_log_data:
+            # Customize the display based on your needs
+            # For example, create labels to show each column of the AuditLog table
+            label = tk.Label(audit_log_window, text=f'UserID: {row.userid}, Name: {row.username}, Action: {row.actions}, Timestamp: {row.timestamp}')
+            label.pack()
+
+    except Exception as e:
+        # Handle exceptions (e.g., database connection errors)
+        print(f"Error: {e}")
+
+    finally:
+        # Close the database connection
         if 'conn' in locals() and conn:
             conn.close()
 
